@@ -1,10 +1,10 @@
-from __future__ import division
+from __future__ import division   # python2.x中导入python未来支持的语言特征division(精确除法)
 
-from collections import OrderedDict
+from collections import OrderedDict  # 用于获取有序字典
 
 import torch
 from mmcv.runner import Runner, DistSamplerSeedHook
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel   # 重新封装了torch内部的并行计算，包括数据的collect、distribute、Scatter等，与cuda相关
 
 from mmdet.core import (DistOptimizerHook, DistEvalmAPHook,
                         CocoDistEvalRecallHook, CocoDistEvalmAPHook)
@@ -13,27 +13,27 @@ from mmdet.models import RPN
 from .env import get_root_logger
 
 
-def parse_losses(losses):
+def parse_losses(losses):   # 解析_损失
     log_vars = OrderedDict()
-    for loss_name, loss_value in losses.items():
+    for loss_name, loss_value in losses.items():    # dict.items()返回可遍历的(键, 值)元组数组
         if isinstance(loss_value, torch.Tensor):
-            log_vars[loss_name] = loss_value.mean()
+            log_vars[loss_name] = loss_value.mean()   # 计算样本的平均值
         elif isinstance(loss_value, list):
             log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
         else:
             raise TypeError(
                 '{} is not a tensor or list of tensors'.format(loss_name))
 
-    loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
+    loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)  #求和
 
     log_vars['loss'] = loss
     for name in log_vars:
-        log_vars[name] = log_vars[name].item()
+        log_vars[name] = log_vars[name].item()  #将单元素张量变为张量
 
     return loss, log_vars
 
 
-def batch_processor(model, data, train_mode):
+def batch_processor(model, data, train_mode):   # 批_处理器
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
 
@@ -43,24 +43,24 @@ def batch_processor(model, data, train_mode):
     return outputs
 
 
-def train_detector(model,
+def train_detector(model,                    # 训练检测器
                    dataset,
                    cfg,
                    distributed=False,
                    validate=False,
                    logger=None):
     if logger is None:
-        logger = get_root_logger(cfg.log_level)
+        logger = get_root_logger(cfg.log_level)      # 获取日志信息
 
     # start training
     if distributed:
-        _dist_train(model, dataset, cfg, validate=validate)
+        _dist_train(model, dataset, cfg, validate=validate)    # 分布式训练
     else:
-        _non_dist_train(model, dataset, cfg, validate=validate)
+        _non_dist_train(model, dataset, cfg, validate=validate)   # 非分布式训练
 
 
 def _dist_train(model, dataset, cfg, validate=False):
-    # prepare data loaders
+    # prepare data loaders 加载数据
     data_loaders = [
         build_dataloader(
             dataset,
