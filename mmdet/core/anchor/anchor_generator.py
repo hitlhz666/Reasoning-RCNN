@@ -6,14 +6,15 @@ class AnchorGenerator(object):
     def __init__(self, base_size, scales, ratios, scale_major=True, ctr=None):
         self.base_size = base_size
         self.scales = torch.Tensor(scales)
-        self.ratios = torch.Tensor(ratios)
+        self.ratios = torch.Tensor(ratios)  # ratios 比率
         self.scale_major = scale_major
         self.ctr = ctr
         self.base_anchors = self.gen_base_anchors()
 
-    @property
+    # @property 装饰器会将方法转换为相同名称的只读属性, 可以与所定义的属性配合使用, 这样可以防止属性被修改
+    @property     # 装饰器, 创建只读属性
     def num_base_anchors(self):
-        return self.base_anchors.size(0)
+        return self.base_anchors.size(0)   # size(a,0)返回该二维矩阵的行数
 
     def gen_base_anchors(self):
         w = self.base_size
