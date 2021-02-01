@@ -2,6 +2,7 @@
 # 用 generate_anchors 产生多种坐标变换，这种坐标变换由scale和ratio来，相当于提前计算好。
 # anchor_target_layer 先计算的是从feature map映射到原图的中点坐标，然后根据多种坐标变换生成不同的框。
 
+
 # anchor 锚, 锚点生成
 
 anchor_target_layer层是产生在rpn训练阶段产生anchors的层
