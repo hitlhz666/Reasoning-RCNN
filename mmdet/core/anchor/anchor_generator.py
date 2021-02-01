@@ -63,19 +63,21 @@ class AnchorGenerator(object):
         shift_x = torch.arange(0, feat_w, device=device) * stride  # arange() 返回一维大小的张量 tensor([0, 1, 2, ..., feat_w-1])
         shift_y = torch.arange(0, feat_h, device=device) * stride
         shift_xx, shift_yy = self._meshgrid(shift_x, shift_y)
-        shifts = torch.stack([shift_xx, shift_yy, shift_xx, shift_yy], dim=-1)
-        shifts = shifts.type_as(base_anchors)
-        # first feat_w elements correspond to the first row of shifts
-        # add A anchors (1, A, 4) to K shifts (K, 1, 4) to get
-        # shifted anchors (K, A, 4), reshape to (K*A, 4)
-
+        shifts = torch.stack([shift_xx, shift_yy, shift_xx, shift_yy], dim=-1)  #张量逐元素对应相加
+        shifts = shifts.type_as(base_anchors)    # tensor1.type_as(tensor2) 将1的数据类型转换为2的数据类型
+        # first feat_w elements(基本要素) correspond(相当于) to the first row of shifts(转移，变动)
+        # add A anchors (1, A, 4) to K shifts (K, 1, 4) to get shifted anchors (K, A, 4), reshape(重塑形状) to (K*A, 4)
+        
+        # None是python中的一个特殊的常量，表示一个空的对象。
+        # 数据为空并不代表是空对象，例如[],''等都不是None。
+        # None有自己的数据类型NontType，你可以将None赋值给任意对象，但是不能创建一个NoneType对象。
         all_anchors = base_anchors[None, :, :] + shifts[:, None, :]
-        all_anchors = all_anchors.view(-1, 4)
+        all_anchors = all_anchors.view(-1, 4)  # -1表示不知道是 几*4，让系统自己判断
         # first A rows correspond to A anchors of (0, 0) in feature map,
         # then (0, 1), (0, 2), ...
         return all_anchors
 
-    def valid_flags(self, featmap_size, valid_size, device='cuda'):
+    def valid_flags(self, featmap_size, valid_size, device='cuda'):    # valid 有效的; flag 旗
         feat_h, feat_w = featmap_size
         valid_h, valid_w = valid_size
         assert valid_h <= feat_h and valid_w <= feat_w
