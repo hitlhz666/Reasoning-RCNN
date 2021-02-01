@@ -4,11 +4,14 @@ import torch
 class AnchorGenerator(object):
 
     def __init__(self, base_size, scales, ratios, scale_major=True, ctr=None):
-        self.base_size = base_size
-        self.scales = torch.Tensor(scales)
-        self.ratios = torch.Tensor(ratios)  # ratios 长宽比
-        self.scale_major = scale_major
-        self.ctr = ctr
+        self.base_size = base_size       # 基础长宽
+        self.scales = torch.Tensor(scales)  # 放大倍数
+        self.ratios = torch.Tensor(ratios)  # 长宽比
+        self.scale_major = scale_major    # 排列方式, 前m个代表m种scale还是m种ratio
+        self.ctr = ctr   # centre 中心
+        
+        # base_anchor有三个, 这时因为有三个ratio, 一个scale, 中心在 base_size/2 处, 以左上右下表示
+        # 生成方式在 self.gen_base_anchors 中
         self.base_anchors = self.gen_base_anchors()
 
     # @property 装饰器会将方法转换为相同名称的只读属性, 可以与所定义的属性配合使用, 这样可以防止属性被修改
@@ -16,6 +19,7 @@ class AnchorGenerator(object):
     def num_base_anchors(self):
         return self.base_anchors.size(0)   # size(a,0)返回该二维矩阵的行数
 
+    # base_size 由 stride赋值, 如若 anchor 的大小是 base_size/2 的话, 那么这些anchor构成了不相交的划分
     def gen_base_anchors(self):
         w = self.base_size
         h = self.base_size
@@ -25,9 +29,12 @@ class AnchorGenerator(object):
         else:
             x_ctr, y_ctr = self.ctr
             
-            
-        h_ratios = torch.sqrt(self.ratios)     # 逐元素计算张量的平方根
+        # ratio指的是高/宽  取一个根号   
+        h_ratios = torch.sqrt(self.ratios)     # sqrt 逐元素计算张量的平方根
         w_ratios = 1 / h_ratios
+        
+        # 如果是scale_major，那么ratios变为3*1的矩阵，scale变为1 * 1（scale个数）的矩阵。最后相乘，以基础长宽为基础，最后拉长，得到w_s
+        # 如果 scale 的个数为2，那么ws的前2个为ratios[0]乘上两个scales的w，之后两个为ratios[1]乘上两个scale的w
         if self.scale_major:
             # view()返回的数据和传入的tensor一样，只是形状不同          
             # -1本意是根据另外一个数来自动调整维度，但是这里只有一个维度, 因此就会将X里面的所有维度数据转化成一维的, 并且按先后顺序排列
@@ -45,7 +52,8 @@ class AnchorGenerator(object):
                 x_ctr + 0.5 * (ws - 1), y_ctr + 0.5 * (hs - 1)
             ],
             dim=-1).round()  # dim=-1 直接按照逐个元素的累加方法进行; round() 返回浮点数x的四舍五入值
-
+        
+        # 最终返回左上角和右下角, 并取整
         return base_anchors
 
     def _meshgrid(self, x, y, row_major=True):      # 生成网格点坐标
@@ -55,8 +63,10 @@ class AnchorGenerator(object):
             return xx, yy
         else:
             return yy, xx
-
-    def grid_anchors(self, featmap_size, stride=16, device='cuda'):   # 网格_锚点; Stride(步长) = 每像素占用的字节数(像素位数/8) * Width(每行的像素个数)
+        
+    # Stride(步长) = 每像素占用的字节数(像素位数/8) * Width(每行的像素个数)
+    #  输入: 特征图尺寸, Stride, 生成meshgrid，以(0, 0)为左上角起点生成grid的(x, y)坐标，距离为stride   shift_xx,shift_yy
+    def grid_anchors(self, featmap_size, stride=16, device='cuda'):
         base_anchors = self.base_anchors.to(device)    # to(device)在指定设备上训练
 
         feat_h, feat_w = featmap_size                  # 从特征图的尺寸中获取高和宽
@@ -75,6 +85,8 @@ class AnchorGenerator(object):
         all_anchors = all_anchors.view(-1, 4)  # -1表示不知道是 几*4，让系统自己判断
         # first A rows correspond to A anchors of (0, 0) in feature map,
         # then (0, 1), (0, 2), ...
+        
+        # grid_anchors获得的 anchor按照 level从低到高append起来, 得到anchor_list
         return all_anchors
 
     def valid_flags(self, featmap_size, valid_size, device='cuda'):    # valid 有效的; flag 旗
