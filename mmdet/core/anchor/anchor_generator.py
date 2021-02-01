@@ -24,22 +24,27 @@ class AnchorGenerator(object):
             y_ctr = 0.5 * (h - 1)
         else:
             x_ctr, y_ctr = self.ctr
-
-        h_ratios = torch.sqrt(self.ratios)
+            
+            
+        h_ratios = torch.sqrt(self.ratios)     # 逐元素计算张量的平方根
         w_ratios = 1 / h_ratios
         if self.scale_major:
-            ws = (w * w_ratios[:, None] * self.scales[None, :]).view(-1)
+            # view()返回的数据和传入的tensor一样，只是形状不同          
+            # -1本意是根据另外一个数来自动调整维度，但是这里只有一个维度，因此就会将X里面的所有维度数据转化成一维的，并且按先后顺序排列。
+            ws = (w * w_ratios[:, None] * self.scales[None, :]).view(-1) 
             hs = (h * h_ratios[:, None] * self.scales[None, :]).view(-1)
         else:
             ws = (w * self.scales[:, None] * w_ratios[None, :]).view(-1)
             hs = (h * self.scales[:, None] * h_ratios[None, :]).view(-1)
 
+        # stack()拼接函数 沿着一个新维度对输入张量序列进行连接, 序列中所有的张量都应该为相同形状
+        # 把多个2维的张量凑成一个3维的张量; 多个3维的凑成一个4维的张量...即在增加新的维度上进行堆叠
         base_anchors = torch.stack(
             [
                 x_ctr - 0.5 * (ws - 1), y_ctr - 0.5 * (hs - 1),
                 x_ctr + 0.5 * (ws - 1), y_ctr + 0.5 * (hs - 1)
             ],
-            dim=-1).round()
+            dim=-1).round()  # dim=-1 直接按照逐个元素的累加方法进行; round() 返回浮点数x的四舍五入值
 
         return base_anchors
 
