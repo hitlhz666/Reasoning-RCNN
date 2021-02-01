@@ -15,7 +15,9 @@ def anchor_target(anchor_list,
                   label_channels=1,
                   sampling=True,
                   unmap_outputs=True):
-    """Compute(计算) regression(回归) and classification(分类) targets(标签) for anchors.
+    """
+    
+    Compute(计算) regression(回归) and classification(分类) targets(标签) for anchors.
 
     Args:
         anchor_list (list[list]): Multi level anchors of each image.     # 
@@ -28,8 +30,14 @@ def anchor_target(anchor_list,
 
     Returns:
         tuple
+        
+    # 将每张图片的 gt_bboxes都cat到一起, 以及valid_flag_list
+    # 对每一张图片调用 anchor_target_simple
+
     """
-    num_imgs = len(img_metas)
+    
+    
+    num_imgs = len(img_metas)   # 图片数量
     assert len(anchor_list) == len(valid_flag_list) == num_imgs
 
     # anchor number of multi levels
@@ -68,6 +76,7 @@ def anchor_target(anchor_list,
     label_weights_list = images_to_levels(all_label_weights, num_level_anchors)
     bbox_targets_list = images_to_levels(all_bbox_targets, num_level_anchors)
     bbox_weights_list = images_to_levels(all_bbox_weights, num_level_anchors)
+    
     return (labels_list, label_weights_list, bbox_targets_list,
             bbox_weights_list, num_total_pos, num_total_neg)
 
@@ -87,7 +96,9 @@ def images_to_levels(target, num_level_anchors):
     return level_targets
 
 
-def anchor_target_single(flat_anchors,
+
+  # 利用inside_flags筛选掉在边界外的框
+  def anchor_target_single(flat_anchors,
                          valid_flags,
                          gt_bboxes,
                          gt_labels,
@@ -167,7 +178,8 @@ def expand_binary_labels(labels, label_weights, label_channels):
     return bin_labels, bin_label_weights
 
 
-def anchor_inside_flags(flat_anchors, valid_flags, img_shape,
+
+  def anchor_inside_flags(flat_anchors, valid_flags, img_shape,
                         allowed_border=0):
     img_h, img_w = img_shape[:2]
     if allowed_border >= 0:
