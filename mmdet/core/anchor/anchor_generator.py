@@ -48,7 +48,7 @@ class AnchorGenerator(object):
 
         return base_anchors
 
-    def _meshgrid(self, x, y, row_major=True):
+    def _meshgrid(self, x, y, row_major=True):      # 生成网格点坐标
         xx = x.repeat(len(y))     # 重复单个数
         yy = y.view(-1, 1).repeat(1, len(x)).view(-1)   # view(-1, 1) 得到一个列tensor
         if row_major:
@@ -80,13 +80,14 @@ class AnchorGenerator(object):
     def valid_flags(self, featmap_size, valid_size, device='cuda'):    # valid 有效的; flag 旗
         feat_h, feat_w = featmap_size
         valid_h, valid_w = valid_size
-        assert valid_h <= feat_h and valid_w <= feat_w
-        valid_x = torch.zeros(feat_w, dtype=torch.uint8, device=device)
+        assert valid_h <= feat_h and valid_w <= feat_w  # 断言, 用于报错
+        valid_x = torch.zeros(feat_w, dtype=torch.uint8, device=device)   # 零张量
         valid_y = torch.zeros(feat_h, dtype=torch.uint8, device=device)
         valid_x[:valid_w] = 1
         valid_y[:valid_h] = 1
         valid_xx, valid_yy = self._meshgrid(valid_x, valid_y)
-        valid = valid_xx & valid_yy
-        valid = valid[:, None].expand(
-            valid.size(0), self.num_base_anchors).contiguous().view(-1)
+        valid = valid_xx & valid_yy    # & 位运算, 与运算
+        valid = valid[:, None].expand(        # list.extend(list1) 参数必须是列表类型, 可以将参数中的列表合并到原列表的末尾
+            valid.size(0), self.num_base_anchors).contiguous().view(-1)    # size(axis) axis = 0, 返回该二维矩阵的行数; axis = 1, 返回该二维矩阵的列数
+            # 把tensor变成在内存中连续分布的形式
         return valid
