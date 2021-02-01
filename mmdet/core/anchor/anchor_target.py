@@ -15,10 +15,10 @@ def anchor_target(anchor_list,
                   label_channels=1,
                   sampling=True,
                   unmap_outputs=True):
-    """Compute regression and classification targets for anchors.
+    """Compute(计算) regression(回归) and classification(分类) targets(标签) for anchors.
 
     Args:
-        anchor_list (list[list]): Multi level anchors of each image.
+        anchor_list (list[list]): Multi level anchors of each image.     # 
         valid_flag_list (list[list]): Multi level valid flags of each image.
         gt_bboxes_list (list[Tensor]): Ground truth bboxes of each image.
         img_metas (list[dict]): Meta info of each image.
