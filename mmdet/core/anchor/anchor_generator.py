@@ -6,7 +6,7 @@ class AnchorGenerator(object):
     def __init__(self, base_size, scales, ratios, scale_major=True, ctr=None):
         self.base_size = base_size
         self.scales = torch.Tensor(scales)
-        self.ratios = torch.Tensor(ratios)  # ratios 比率(复数)
+        self.ratios = torch.Tensor(ratios)  # ratios 长宽比
         self.scale_major = scale_major
         self.ctr = ctr
         self.base_anchors = self.gen_base_anchors()
@@ -56,7 +56,7 @@ class AnchorGenerator(object):
         else:
             return yy, xx
 
-    def grid_anchors(self, featmap_size, stride=16, device='cuda'):   # 网格_锚点; Stride = 每像素占用的字节数(像素位数/8) * Width(每行的像素个数)
+    def grid_anchors(self, featmap_size, stride=16, device='cuda'):   # 网格_锚点; Stride(步长) = 每像素占用的字节数(像素位数/8) * Width(每行的像素个数)
         base_anchors = self.base_anchors.to(device)    # to(device)在指定设备上训练
 
         feat_h, feat_w = featmap_size                  # 从特征图的尺寸中获取高和宽
@@ -89,5 +89,5 @@ class AnchorGenerator(object):
         valid = valid_xx & valid_yy    # & 位运算, 与运算
         valid = valid[:, None].expand(        # list.extend(list1) 参数必须是列表类型, 可以将参数中的列表合并到原列表的末尾
             valid.size(0), self.num_base_anchors).contiguous().view(-1)    # size(axis) axis = 0, 返回该二维矩阵的行数; axis = 1, 返回该二维矩阵的列数
-            # 把tensor变成在内存中连续分布的形式
+            # contiguous() 把tensor变成在内存中连续分布的形式
         return valid
