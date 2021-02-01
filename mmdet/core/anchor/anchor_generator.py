@@ -1,6 +1,17 @@
 import torch
 
+"""
+Get anchors according to feature map sizes.
+Args:
+            featmap_sizes (list[tuple]): Multi-level feature map sizes.
+            img_metas (list[dict]): Image meta info.
+Returns:
+            tuple: anchors of each image, valid flags of each image
+# num_imgs: 多少张图片
+# num_levels: FPN的level个数
+# 对于每一个level，使用self.anchor_generator的grid_anchors 获得anchors
 
+"""
 class AnchorGenerator(object):
 
     def __init__(self, base_size, scales, ratios, scale_major=True, ctr=None):
