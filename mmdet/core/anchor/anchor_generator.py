@@ -30,7 +30,7 @@ class AnchorGenerator(object):
         w_ratios = 1 / h_ratios
         if self.scale_major:
             # view()返回的数据和传入的tensor一样，只是形状不同          
-            # -1本意是根据另外一个数来自动调整维度，但是这里只有一个维度，因此就会将X里面的所有维度数据转化成一维的，并且按先后顺序排列。
+            # -1本意是根据另外一个数来自动调整维度，但是这里只有一个维度, 因此就会将X里面的所有维度数据转化成一维的, 并且按先后顺序排列
             ws = (w * w_ratios[:, None] * self.scales[None, :]).view(-1) 
             hs = (h * h_ratios[:, None] * self.scales[None, :]).view(-1)
         else:
@@ -49,18 +49,18 @@ class AnchorGenerator(object):
         return base_anchors
 
     def _meshgrid(self, x, y, row_major=True):
-        xx = x.repeat(len(y))
-        yy = y.view(-1, 1).repeat(1, len(x)).view(-1)
+        xx = x.repeat(len(y))     # 重复单个数
+        yy = y.view(-1, 1).repeat(1, len(x)).view(-1)   # view(-1, 1) 得到一个列tensor
         if row_major:
             return xx, yy
         else:
             return yy, xx
 
-    def grid_anchors(self, featmap_size, stride=16, device='cuda'):
-        base_anchors = self.base_anchors.to(device)
+    def grid_anchors(self, featmap_size, stride=16, device='cuda'):   # 网格_锚点; Stride = 每像素占用的字节数(像素位数/8) * Width(每行的像素个数)
+        base_anchors = self.base_anchors.to(device)    # to(device)在指定设备上训练
 
-        feat_h, feat_w = featmap_size
-        shift_x = torch.arange(0, feat_w, device=device) * stride
+        feat_h, feat_w = featmap_size                  # 从特征图的尺寸中获取高和宽
+        shift_x = torch.arange(0, feat_w, device=device) * stride  # arange() 返回一维大小的张量 tensor([0, 1, 2, ..., feat_w-1])
         shift_y = torch.arange(0, feat_h, device=device) * stride
         shift_xx, shift_yy = self._meshgrid(shift_x, shift_y)
         shifts = torch.stack([shift_xx, shift_yy, shift_xx, shift_yy], dim=-1)
