@@ -18,9 +18,11 @@ def anchor_target(anchor_list,
     """
     
     Compute(计算) regression(回归) and classification(分类) targets(标签) for anchors.
-
+    
+    # multiple levels(Multi levels) 多层次
+    
     Args:
-        anchor_list (list[list]): Multi level anchors of each image.     # 
+        anchor_list (list[list]): Multi level anchors of each image.
         valid_flag_list (list[list]): Multi level valid flags of each image.
         gt_bboxes_list (list[Tensor]): Ground truth bboxes of each image.
         img_metas (list[dict]): Meta info of each image.
@@ -29,7 +31,7 @@ def anchor_target(anchor_list,
         cfg (dict): RPN train configs.
 
     Returns:
-        tuple
+        tuple    # 元组  python 中序列只有 list(列表) 和tuple(元组) 
         
     # 将每张图片的 gt_bboxes都cat到一起, 以及valid_flag_list
     # 对每一张图片调用 anchor_target_simple
@@ -42,15 +44,16 @@ def anchor_target(anchor_list,
 
     # anchor number of multi levels
     num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
-    # concat all level anchors and flags to a single tensor
+    
+    # concat(合并多个数组) all level anchors and flags to a single tensor
     for i in range(num_imgs):
-        assert len(anchor_list[i]) == len(valid_flag_list[i])
-        anchor_list[i] = torch.cat(anchor_list[i])
+        assert len(anchor_list[i]) == len(valid_flag_list[i])  # 检查长度是否相等
+        anchor_list[i] = torch.cat(anchor_list[i])  # cat(concatenate) 拼接, 将两个tensor拼接在一起; 将list中的元素(tensor)按行拼接(axis=0)
         valid_flag_list[i] = torch.cat(valid_flag_list[i])
 
     # compute targets for each image
     if gt_labels_list is None:
-        gt_labels_list = [None for _ in range(num_imgs)]
+        gt_labels_list = [None for _ in range(num_imgs)]   # range() 创建一个整数列表, 一般用于 for 循环
     (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
      pos_inds_list, neg_inds_list) = multi_apply(
          anchor_target_single,
@@ -65,13 +68,16 @@ def anchor_target(anchor_list,
          label_channels=label_channels,
          sampling=sampling,
          unmap_outputs=unmap_outputs)
+    
     # no valid anchors
-    if any([labels is None for labels in all_labels]):
+    if any([labels is None for labels in all_labels]):   # any() 用于判断给定的可迭代参数 iterable 是否全为 False，若是则返回 False
         return None
-    # sampled anchors of all images
-    num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])
-    num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])
-    # split targets to a list w.r.t. multiple levels
+      
+    # sampled anchors of all images  所有图像采样的锚点
+    num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])  # 结果为正
+    num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])  # 结果为负
+    
+    # split(分开) targets to a list w.r.t. multiple levels
     labels_list = images_to_levels(all_labels, num_level_anchors)
     label_weights_list = images_to_levels(all_label_weights, num_level_anchors)
     bbox_targets_list = images_to_levels(all_bbox_targets, num_level_anchors)
@@ -82,16 +88,20 @@ def anchor_target(anchor_list,
 
 
 def images_to_levels(target, num_level_anchors):
-    """Convert targets by image to targets by feature level.
+  
+    """
+    Convert targets by(of) image to targets by(of) feature level.   # 将图像中的目标(target) 转变为特征层中的目标
 
     [target_img0, target_img1] -> [target_level0, target_level1, ...]
+    
     """
-    target = torch.stack(target, 0)
+    
+    target = torch.stack(target, 0)  # 沿着一个新维度对输入张量序列进行连接; 序列中所有的张量都应该为相同形状
     level_targets = []
     start = 0
     for n in num_level_anchors:
         end = start + n
-        level_targets.append(target[:, start:end].squeeze(0))
+        level_targets.append(target[:, start:end].squeeze(0))    # append() 在列表末尾添加新对象;  squeeze(0) 压缩维度, 移除数组中维度为1的维度
         start = end
     return level_targets
 
