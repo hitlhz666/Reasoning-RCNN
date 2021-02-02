@@ -1,6 +1,6 @@
 import torch
 
-
+# 分配结果
 class AssignResult(object):
 
     def __init__(self, num_gts, gt_inds, max_overlaps, labels=None):
@@ -11,9 +11,9 @@ class AssignResult(object):
 
     def add_gt_(self, gt_labels):
         self_inds = torch.arange(
-            1, len(gt_labels) + 1, dtype=torch.long, device=gt_labels.device)
+            1, len(gt_labels) + 1, dtype=torch.long, device=gt_labels.device)     # arange(start, end): [start, end), step   1-D tensor
         self.gt_inds = torch.cat([self_inds, self.gt_inds])
-        self.max_overlaps = torch.cat(
+        self.max_overlaps = torch.cat(                                            # cat(tensor1, tensor2) 将两个 tensor 拼接在一起
             [self.max_overlaps.new_ones(self.num_gts), self.max_overlaps])
         if self.labels is not None:
             self.labels = torch.cat([gt_labels, self.labels])
