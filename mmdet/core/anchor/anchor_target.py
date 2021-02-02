@@ -57,15 +57,22 @@ def anchor_target(anchor_list,
     # anchor number of multi levels   计算每个尺度 anchor 的数量 [187200, 46800, 11700, 2925, 780]
     num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
     
-    # concat(合并多个数组) all level anchors and flags to a single tensor
+    anchor_list = []         # 初始化 list
+    valid_flag_list = []
+    # concat(合并多个数组) all level anchors and flags to a single tensor  遍历每个图片, 合并每个图片中所有尺度的 anchor
     for i in range(num_imgs):
         assert len(anchor_list[i]) == len(valid_flag_list[i])  # 检查长度是否相等
-        anchor_list[i] = torch.cat(anchor_list[i])  # cat(concatenate) 拼接, 将两个tensor拼接在一起; 将list中的元素(tensor)按行拼接(axis=0)
-        valid_flag_list[i] = torch.cat(valid_flag_list[i])
-
+        # cat(concatenate) 拼接, 将两个tensor拼接在一起; (axis=0)将list中的元素(tensor)按行拼接
+        anchor_list[i] = torch.cat(anchor_list[i])           # 合并所有尺度的 anchor  
+        valid_flag_list[i] = torch.cat(valid_flag_list[i])   # 合并所有尺度的 flag
+    
     # compute targets for each image
+    if gt_bboxes_ignore_list is None:
+        # range() 创建一个整数列表, 一般用于 for 循环            
+        gt_bboxes_ignore_list = [None for _ in range(num_imgs)]   # <class 'list'>: [None, None, None, None]
     if gt_labels_list is None:
-        gt_labels_list = [None for _ in range(num_imgs)]   # range() 创建一个整数列表, 一般用于 for 循环
+        gt_labels_list = [None for _ in range(num_imgs)]              # <class 'list'>: [None, None, None, None]
+        
     (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
      pos_inds_list, neg_inds_list) = multi_apply(
          anchor_target_single,
@@ -85,9 +92,9 @@ def anchor_target(anchor_list,
     if any([labels is None for labels in all_labels]):   # any() 用于判断给定的可迭代参数 iterable 是否全为 False，若是则返回 False
         return None
       
-    # sampled anchors of all images  所有图像采样的锚点
-    num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])  # 结果为正
-    num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])  # 结果为负
+    # sampled anchors of all images  统计所有 image 的正负样本
+    num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])  # 正样本
+    num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])  # 负样本
     
     # split(分开) targets to a list w.r.t. multiple levels
     labels_list = images_to_levels(all_labels, num_level_anchors)
