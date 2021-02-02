@@ -9,14 +9,6 @@ from .transforms import (bbox2delta, delta2bbox, bbox_flip, bbox_mapping,
 from .bbox_target import bbox_target
 
 
-"""
-
-assign和sample是在anchor target中的核心操作
-assign一般基于IOU, mmdet中也有基于atss和基于point的等
-sample一般为随机, 也有ohem的, 基于伪标签的
-"""
-
-
 
 __all__ = [
     'bbox_overlaps', 'BaseAssigner', 'MaxIoUAssigner', 'AssignResult',
