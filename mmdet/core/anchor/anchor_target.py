@@ -17,32 +17,44 @@ def anchor_target(anchor_list,
                   unmap_outputs=True):
     """
     
-    Compute(计算) regression(回归) and classification(分类) targets(标签) for anchors.
+    Compute(计算) regression(回归) and classification(分类) targets(目标) for anchors.
     
-    # multiple levels(Multi levels) 多层次
+    # 又名 get_targets   获得一个批次的训练和回归目标.
     
     Args:
-        anchor_list (list[list]): Multi level anchors of each image.
-        valid_flag_list (list[list]): Multi level valid flags of each image.
-        gt_bboxes_list (list[Tensor]): Ground truth bboxes of each image.
-        img_metas (list[dict]): Meta info of each image.
-        target_means (Iterable): Mean value of regression targets.
-        target_stds (Iterable): Std value of regression targets.
-        cfg (dict): RPN train configs.
+        anchor_list:            (list[list[Tensor]])    所有批次所有尺度的 anchor 的列表,
+                                                        每个 tensor 代表一张图片的一个尺度的 anchor, 形状为 (num_anchors, 4).
+        valid_flag_list:        (list[list[Tensor]]):   所有批次所有尺度 anchor 的 valid flag,
+                                                        每个 tensor 代表一张图片的一个尺度的 anchor 的 valid flag, 形状为 (num_anchors,).
+        gt_bboxes_list:         (list[Tensor]):         一个 batch 的 gt bbox, 每个 tensor 的形状为 (num_gts, 4).
+        img_metas:              (list[dict]):           一个 batch 的图片的属性信息.
+        gt_bboxes_ignore_list:  (list[Tensor]):         需要忽略的 gt bboxes.
+        gt_labels_list:         (list[Tensor] | None):  一个 batch 的 gt labels.
+        label_channels:         (int):                  标签的通道.
+        unmap_outputs:          (bool):                 是否填充 anchor 到没有筛选 valid flag 的长度.
 
     Returns:
-        tuple    # 元组  python 中序列只有 list(列表) 和tuple(元组) 
-        
-    # 将每张图片的 gt_bboxes都cat到一起, 以及valid_flag_list
+            tuple:
+                labels_list:        (list[Tensor]):     每个尺度的 label, 每个元素的形状为 (batch, n_anchors)
+                label_weights_list: (list[Tensor]):     每个尺度 label 的权重, 每个元素的形状为 (batch, n_anchors)
+                bbox_targets_list:  (list[Tensor]):     每个尺度的 bbox, 每个元素的形状为 (batch, n_anchors, 4)
+                bbox_weights_list:  (list[Tensor]):     每个尺度 bbox 的权重, 每个元素的形状为 (batch, n_anchors, 4)
+                num_total_pos:      (int):              一个批次所有图片的正样本总数
+                num_total_neg:      (int):              一个批次所有图片的负样本总数
+            additional_returns: This function enables user-defined returns from
+                `self._get_targets_single`. These returns are currently refined
+                to properties at each feature map (i.e. having HxW dimension).
+                The results will be concatenated after the end
+    # 将每张图片的 gt_bboxes都cat到一起, 每张图片的valid_flag_list也cat到一起
     # 对每一张图片调用 anchor_target_simple
 
     """
     
     
-    num_imgs = len(img_metas)   # 图片数量
+    num_imgs = len(img_metas)   # 计算 batch 的数量
     assert len(anchor_list) == len(valid_flag_list) == num_imgs
 
-    # anchor number of multi levels
+    # anchor number of multi levels   计算每个尺度 anchor 的数量 [187200, 46800, 11700, 2925, 780]
     num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
     
     # concat(合并多个数组) all level anchors and flags to a single tensor
@@ -106,9 +118,7 @@ def images_to_levels(target, num_level_anchors):
     return level_targets
 
 
-
-  # 利用inside_flags筛选掉在边界外的框
-  def anchor_target_single(flat_anchors,
+def anchor_target_single(flat_anchors,
                          valid_flags,
                          gt_bboxes,
                          gt_labels,
@@ -119,14 +129,58 @@ def images_to_levels(target, num_level_anchors):
                          label_channels=1,
                          sampling=True,
                          unmap_outputs=True):
+    """
+    计算一张图片 anchor 的回归和分类的目标
+    # 又名 _get_targets_single
+    
+    Args:
+        flat_anchors:       (Tensor):   合并后的多尺度的 anchor. 形状为: (num_anchors ,4).
+        valid_flags:        (Tensor):   合并后的多尺度的 anchor 的 flag, 形状为 (num_anchors,).
+        gt_bboxes:          (Tensor):   图像的 ground truth bbox, 形状为 (num_gts, 4).
+        gt_bboxes_ignore:   (Tensor):   需要忽略的 Ground truth bboxes 形状为: (num_ignored_gts, 4).
+        img_meta:           (dict):     此图像的属性信息
+        gt_labels:          (Tensor):   每个 box 的 Ground truth labels, 形状为 (num_gts,).
+        label_channels:     (int):      label 所在的通道.
+        unmap_outputs:      (bool):     是否将输出映射回原始 anchor 配置.
+
+    Returns:
+        tuple:
+            labels:          (Tensor):    训练的标签, 形状为 (anchor 总数,)
+            label_weights:   (Tensor):    训练标签的权重, 形状为 (anchor 总数,)
+            bbox_targets:    (Tensor):    bbox 训练的目标值, 形状为 (anchor 总数, 4)
+            bbox_weights:    (Tensor):    bbox 训练目标值的权重, 形状为 (anchor 总数, 4)
+            pos_inds:        (Tensor):    正样本的索引, 形状为 (正样本总数,)
+            neg_inds:        (Tensor):    负样本的索引, 形状为 (负样本总数,)
+            
+            
+    1. 筛选出有效的 anchor
+    2. anchor 分配正负样本(assigner) & anchor 正负样本采样(sampler)
+    3. 构建 bbox 和 label 的目标和权重
+      (1) 构建 bbox 的目标和权重：
+        将正样本的 anchor 编码为中心点坐标，宽和高的偏移量。
+        将正样本对应的 indices 设置为编码后的 anchor
+        将正样本的权重设置为 1
+      (2) 构建 label 的目标和权重：
+        将正样本的 label 设置为 1，代表前景
+        将正样本的权重设置为 1
+    4. 填充 anchor 到没有筛选 valid flag 的长度
+        
+    """
+   
+# ========================= 1. 筛选出有效的 anchor ===========================
+    # 获得有效的 flag, 这里的 inside_flags 就等于 valid_flags, 形状为 (num_anchors,)
     inside_flags = anchor_inside_flags(flat_anchors, valid_flags,
                                        img_meta['img_shape'][:2],
                                        cfg.allowed_border)
+    
+    # 如果 anchor 没有一个有效, 直接返回
     if not inside_flags.any():
         return (None, ) * 6
-    # assign gt and sample anchors
+      
+    # 筛选有效的 anchor, 此时 anchor 数量会减少为有效的 anchor 数量.
     anchors = flat_anchors[inside_flags, :]
 
+# ============== 2. anchor 分配(assign)正负样本 & 正负样本采样(sample) ===============
     if sampling:
         assign_result, sampling_result = assign_and_sample(
             anchors, gt_bboxes, None, None, cfg)
@@ -138,41 +192,52 @@ def images_to_levels(target, num_level_anchors):
         sampling_result = bbox_sampler.sample(assign_result, anchors,
                                               gt_bboxes)
 
-    num_valid_anchors = anchors.shape[0]
-    bbox_targets = torch.zeros_like(anchors)
-    bbox_weights = torch.zeros_like(anchors)
-    labels = anchors.new_zeros(num_valid_anchors, dtype=torch.long)
-    label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
+        
+# ======================== 3. 构建 label 和 bbox 的目标和权重 =====================
 
-    pos_inds = sampling_result.pos_inds
+    num_valid_anchors = anchors.shape[0]      # 有效的 anchor 数量
+    bbox_targets = torch.zeros_like(anchors)  # bbox 目标, 初始化将目标设置为 0
+    bbox_weights = torch.zeros_like(anchors)  # bbox 权重, 即是否需要算入损失, 是否需要网络学习. 初始化将权重设置为 0
+    labels = anchors.new_zeros(num_valid_anchors, dtype=torch.long)    # label 的目标, (初始化先将所有有效的 anchor 的标签标记为背景 (0))
+    label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)   # label 的权重, 初始化将将权重权设置为 0
+
+    pos_inds = sampling_result.pos_inds   # 获得正负样本的索引
     neg_inds = sampling_result.neg_inds
     if len(pos_inds) > 0:
+    # ================ （1）构建 bbox 的目标和权重 ====================
         pos_bbox_targets = bbox2delta(sampling_result.pos_bboxes,
                                       sampling_result.pos_gt_bboxes,
                                       target_means, target_stds)
+        
+        # 将正样本对应的 indices 设置为编码后的 anchor, 将权重设置为 1
         bbox_targets[pos_inds, :] = pos_bbox_targets
         bbox_weights[pos_inds, :] = 1.0
-        if gt_labels is None:
+        
+    # ================ （2）构建 label 的目标和权重 ===================
+        if gt_labels is None:      # 只有 rpn 的 gt_labels 才设置为 None
             labels[pos_inds] = 1
-        else:
+        else:                      # 否则设置为对应的类别编号
             labels[pos_inds] = gt_labels[sampling_result.pos_assigned_gt_inds]
+        
+        # 将正样本的权重设置为 1
         if cfg.pos_weight <= 0:
             label_weights[pos_inds] = 1.0
         else:
             label_weights[pos_inds] = cfg.pos_weight
     if len(neg_inds) > 0:
         label_weights[neg_inds] = 1.0
-
+        
+# ===================== 4. 填充 anchor 到没有筛选 valid flag 的长度. ==================
     # map up to original set of anchors
     if unmap_outputs:
         num_total_anchors = flat_anchors.size(0)
-        labels = unmap(labels, num_total_anchors, inside_flags)
-        label_weights = unmap(label_weights, num_total_anchors, inside_flags)
+        labels = unmap(labels, num_total_anchors, inside_flags)                  # 填充 labels
+        label_weights = unmap(label_weights, num_total_anchors, inside_flags)    # 填充 label_weights
         if label_channels > 1:
             labels, label_weights = expand_binary_labels(
                 labels, label_weights, label_channels)
-        bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
-        bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
+        bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)      # 填充 bbox_targets
+        bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)      # 填充 bbox_weights
 
     return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
             neg_inds)
@@ -189,11 +254,11 @@ def expand_binary_labels(labels, label_weights, label_channels):
 
 
 
-  def anchor_inside_flags(flat_anchors, valid_flags, img_shape,
+def anchor_inside_flags(flat_anchors, valid_flags, img_shape,
                         allowed_border=0):
     img_h, img_w = img_shape[:2]
     if allowed_border >= 0:
-        inside_flags = valid_flags & \
+        inside_flags = valid_flags & \                    # \(末尾) 续行符
             (flat_anchors[:, 0] >= -allowed_border) & \
             (flat_anchors[:, 1] >= -allowed_border) & \
             (flat_anchors[:, 2] < img_w + allowed_border) & \
@@ -204,8 +269,10 @@ def expand_binary_labels(labels, label_weights, label_channels):
 
 
 def unmap(data, count, inds, fill=0):
-    """ Unmap a subset of item (data) back to the original set of items (of
-    size count) """
+    """ 
+    Unmap a subset of item (data) back to the original set of items (of size count) 
+    # 将项目(数据)的一个子集映射回原始的项目集(大小计数)
+    """
     if data.dim() == 1:
         ret = data.new_full((count, ), fill)
         ret[inds] = data
