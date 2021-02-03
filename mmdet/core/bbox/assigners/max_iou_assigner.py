@@ -8,7 +8,7 @@ from ..geometry import bbox_overlaps
 class MaxIoUAssigner(BaseAssigner):
     """Assign a corresponding gt_bbox or background to each bbox.  为每个bbox分配一个相应的gt_bbox或背景
 
-    Each proposals will be assigned with `-1`, `0`, or a positive integer indicating the ground truth index.  每个提案将被分配' -1 '，' 0 '，或一个表示ground truth指数的正整数
+    Each proposals will be assigned with `-1`, `0`, or a positive integer indicating the ground truth index.  每个提案将被分配'-1'，'0'，或一个表示ground truth指数的正整数
 
     - -1: don't care
     - 0: negative sample, no assigned gt
@@ -47,10 +47,10 @@ class MaxIoUAssigner(BaseAssigner):
         0 means negative sample, positive number is the index (1-based) of assigned gt.    0表示负样本，正数为分配 gt 的 index (1-based)
         The assignment is done in following steps, the order matters.                      分配按以下步骤进行，顺序很重要。
         
-        1. assign every bbox to -1                                              # 初始化时假设每个anchor的mask都是-1，表示都是忽略anchor
-        2. assign proposals whose iou with all gts < neg_iou_thr to 0           # 将每个anchor和所有gt的iou的最大Iou小于neg_iou_thr的anchor的mask设置为0，表示是负样本(背景样本)
-        3. for each bbox, if the iou with its nearest gt >= pos_iou_thr,        # 对于每个anchor，计算其和所有gt的iou，选取最大的iou对应的gt位置，如果其最大iou大于等于pos_iou_thr，
-           assign it to that bbox                                                  则设置该anchor的mask设置为1，表示该anchor负责预测该gt bbox,是高质量anchor
+        1. assign every bbox to -1                                            # 初始化时假设每个anchor的mask都是-1，表示都是忽略anchor
+        2. assign proposals whose iou with all gts < neg_iou_thr to 0         # 将每个anchor和所有gt的iou的最大Iou小于neg_iou_thr的anchor的mask设置为0，表示是负样本(背景样本)
+        3. for each bbox, if the iou with its nearest gt >= pos_iou_thr,      # 对于每个anchor，计算其和所有gt的iou，选取最大的iou对应的gt位置，如果其最大iou大于等于pos_iou_thr，
+           assign it to that bbox                                               则设置该anchor的mask设置为1，表示该anchor负责预测该gt bbox,是高质量anchor
            
         # 3的设置可能会出现某些gt没有分配到对应的anchor(由于iou低于pos_iou_thr)，故下一步对于每个gt还需要找出和最大iou的anchor位置，
           如果其iou大于min_pos_iou，将该anchor的mask设置为1，表示该anchor负责预测对应的gt。
