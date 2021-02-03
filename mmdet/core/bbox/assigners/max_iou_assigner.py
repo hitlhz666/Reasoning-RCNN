@@ -43,8 +43,8 @@ class MaxIoUAssigner(BaseAssigner):
         """Assign gt to bboxes.
 
         This method assign a gt bbox to every bbox (proposal/anchor), each bbox            这个方法将gt bbox分配给每个bbox(提案/锚点)，每个bbox
-        will be assigned with -1, 0, or a positive number. -1 means don't care,            将被赋值为-1、0或一个正数。-1表示不在乎，
-        0 means negative sample, positive number is the index (1-based) of assigned gt.    0表示负样本，正数为指数(以1为基础)分配gt。
+        will be assigned with -1, 0, or a positive number. -1 means don't care,            将被赋值为-1、0或一个正数。-1表示不关注，
+        0 means negative sample, positive number is the index (1-based) of assigned gt.    0表示负样本，正数为分配 gt 的 index (1-based)
         The assignment is done in following steps, the order matters.                      分配按以下步骤进行，顺序很重要。
         
         1. assign every bbox to -1                                              # 初始化时假设每个anchor的mask都是-1，表示都是忽略anchor
@@ -73,8 +73,8 @@ class MaxIoUAssigner(BaseAssigner):
         
         if bboxes.shape[0] == 0 or gt_bboxes.shape[0] == 0:
             raise ValueError('No gt or bboxes')
-        bboxes = bboxes[:, :4]
-        overlaps = bbox_overlaps(gt_bboxes, bboxes)
+        bboxes = bboxes[:, :4]                            # bboxes   对2000个proposals, 为 tensor(2000,4)
+        overlaps = bbox_overlaps(gt_bboxes, bboxes)       # 假设有10个gt, 则做iou后, overlaps 为 tensor(10, 2000)
 
         if (self.ignore_iof_thr > 0) and (gt_bboxes_ignore is not None) and (
                 gt_bboxes_ignore.numel() > 0):
@@ -86,7 +86,7 @@ class MaxIoUAssigner(BaseAssigner):
             if ignore_bboxes_inds.numel() > 0:
                 overlaps[ignore_bboxes_inds[:, 0], :] = -1
 
-        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
+        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)     # 开始分配正负例
         return assign_result
 
     def assign_wrt_overlaps(self, overlaps, gt_labels=None):
@@ -106,9 +106,7 @@ class MaxIoUAssigner(BaseAssigner):
         if overlaps.numel() == 0:
             raise ValueError('No gt or proposals')
 
-        num_gts, num_bboxes = overlaps.size(0), overlaps.size(1)
-        
-        
+        num_gts, num_bboxes = overlaps.size(0), overlaps.size(1)   # num_gts 真实labels个数
 
         # 1. assign -1 by default   所有 index(指标, 指数) 设置为 -1, 表示被忽略的 anchor 
         assigned_gt_inds = overlaps.new_full(
