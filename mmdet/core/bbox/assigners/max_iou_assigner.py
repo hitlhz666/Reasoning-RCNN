@@ -47,9 +47,9 @@ class MaxIoUAssigner(BaseAssigner):
         0 means negative sample, positive number is the index (1-based) of assigned gt.    0表示负样本，正数为指数(以1为基础)分配gt。
         The assignment is done in following steps, the order matters.                      分配按以下步骤进行，顺序很重要。
         
-        1. assign every bbox to -1                                               # 初始化时假设每个anchor的mask都是-1，表示都是忽略anchor
-        2. assign proposals whose iou with all gts < neg_iou_thr to 0            # 将每个anchor和所有gt的iou的最大Iou小于neg_iou_thr的anchor的mask设置为0，表示是负样本(背景样本)
-        3. for each bbox, if the iou with its nearest gt >= pos_iou_thr,         # 对于每个anchor，计算其和所有gt的iou，选取最大的iou对应的gt位置，如果其最大iou大于等于pos_iou_thr，
+        1. assign every bbox to -1                                              # 初始化时假设每个anchor的mask都是-1，表示都是忽略anchor
+        2. assign proposals whose iou with all gts < neg_iou_thr to 0           # 将每个anchor和所有gt的iou的最大Iou小于neg_iou_thr的anchor的mask设置为0，表示是负样本(背景样本)
+        3. for each bbox, if the iou with its nearest gt >= pos_iou_thr,        # 对于每个anchor，计算其和所有gt的iou，选取最大的iou对应的gt位置，如果其最大iou大于等于pos_iou_thr，
            assign it to that bbox                                                  则设置该anchor的mask设置为1，表示该anchor负责预测该gt bbox,是高质量anchor
            
         # 3的设置可能会出现某些gt没有分配到对应的anchor(由于iou低于pos_iou_thr)，故下一步对于每个gt还需要找出和最大iou的anchor位置，
@@ -67,7 +67,10 @@ class MaxIoUAssigner(BaseAssigner):
 
         Returns:
             :obj:`AssignResult`: The assign result.
-        """
+       
+       """
+        
+        
         if bboxes.shape[0] == 0 or gt_bboxes.shape[0] == 0:
             raise ValueError('No gt or bboxes')
         bboxes = bboxes[:, :4]
@@ -87,6 +90,7 @@ class MaxIoUAssigner(BaseAssigner):
         return assign_result
 
     def assign_wrt_overlaps(self, overlaps, gt_labels=None):
+        
         """Assign w.r.t. the overlaps of bboxes with gts.
 
         Args:
@@ -97,23 +101,28 @@ class MaxIoUAssigner(BaseAssigner):
         Returns:
             :obj:`AssignResult`: The assign result.
         """
+        
+        
         if overlaps.numel() == 0:
             raise ValueError('No gt or proposals')
 
         num_gts, num_bboxes = overlaps.size(0), overlaps.size(1)
+        
+        
 
-        # 1. assign -1 by default
+        # 1. assign -1 by default   所有 index(指标, 指数) 设置为 -1, 表示被忽略的 anchor 
         assigned_gt_inds = overlaps.new_full(
             (num_bboxes, ), -1, dtype=torch.long)
 
         # for each anchor, which gt best overlaps with it
-        # for each anchor, the max iou of all gts
+        # for each anchor, the max iou of all gts        计算每个 anchor, 和哪个 gt 的 iou 最大
         max_overlaps, argmax_overlaps = overlaps.max(dim=0)
+        
         # for each gt, which anchor best overlaps with it
-        # for each gt, the max iou of all proposals
+        # for each gt, the max iou of all proposals      计算每个 gt, 和哪个 anchor 的 iou 最大, 可能两个 max 的索引有重复
         gt_max_overlaps, gt_argmax_overlaps = overlaps.max(dim=1)
 
-        # 2. assign negative: below
+        # 2. assign negative: below     对于每个anchor，如果其和gt的最大iou都小于neg_iou_thr阈值，则分配负样本
         if isinstance(self.neg_iou_thr, float):
             assigned_gt_inds[(max_overlaps >= 0)
                              & (max_overlaps < self.neg_iou_thr)] = 0
@@ -122,17 +131,20 @@ class MaxIoUAssigner(BaseAssigner):
             assigned_gt_inds[(max_overlaps >= self.neg_iou_thr[0])
                              & (max_overlaps < self.neg_iou_thr[1])] = 0
 
-        # 3. assign positive: above positive IoU threshold
+        # 3. assign positive: above positive IoU threshold      对于每个anchor，如果其和gt的最大iou大于pos_iou_thr阈值，则分配正样本
         pos_inds = max_overlaps >= self.pos_iou_thr
         assigned_gt_inds[pos_inds] = argmax_overlaps[pos_inds] + 1
 
-        # 4. assign fg: for each gt, proposals with highest IoU
+        # 4. assign fg: for each gt, proposals with highest IoU    对于每个gt, 如果其和某个anchor的最大iou大于min_pos_iou阈值，那么依然分配正样本
         for i in range(num_gts):
             if gt_max_overlaps[i] >= self.min_pos_iou:
+                # 该参数的含义是: 当某个gt, 和其中好几个anchor都是最大iou(最大iou对应的anchor有好几个的时候)，则全部分配正样本
+                # 该操作可能会出现某几个anchor和同一个Gt匹配，都负责预测
                 if self.gt_max_assign_all:
                     max_iou_inds = overlaps[i, :] == gt_max_overlaps[i]
                     assigned_gt_inds[max_iou_inds] = i + 1
                 else:
+                    # 仅仅考虑最大的一个, 不考虑多个最大时候
                     assigned_gt_inds[gt_argmax_overlaps[i]] = i + 1
 
         if gt_labels is not None:
