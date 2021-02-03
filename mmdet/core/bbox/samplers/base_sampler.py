@@ -75,7 +75,7 @@ class BaseSampler(metaclass=ABCMeta):
 
         num_expected_pos = int(self.num * self.pos_fraction)     # 计算出选择的正样本的个数
         pos_inds = self.pos_sampler._sample_pos(
-            assign_result, num_expected_pos, bboxes=bboxes, **kwargs)      #从所有正样本中随机选择出num_expected_pos 个正样本
+            assign_result, num_expected_pos, bboxes=bboxes, **kwargs)      #从所有正样本中随机选择出num_expected_pos 个正样本, 得到positive的index
         # We found that sampled indices have duplicated items occasionally.    我们发现抽样的索引偶尔会有重复的项
         # (may be a bug of PyTorch)
         pos_inds = pos_inds.unique()                      # unique()：返回参数数组中所有不同的值, 并按照从小到大排序可选参数
@@ -87,7 +87,7 @@ class BaseSampler(metaclass=ABCMeta):
             if num_expected_neg > neg_upper_bound:
                 num_expected_neg = neg_upper_bound
         neg_inds = self.neg_sampler._sample_neg(
-            assign_result, num_expected_neg, bboxes=bboxes, **kwargs)     #从所有负样本中随机选择num_expected_neg个负样本
+            assign_result, num_expected_neg, bboxes=bboxes, **kwargs)     #从所有负样本中随机选择num_expected_neg个负样本, 然后得到negative inds
         neg_inds = neg_inds.unique()
 
         return SamplingResult(pos_inds, neg_inds, bboxes, gt_bboxes,
