@@ -112,7 +112,7 @@ def _dist_train(model, dataset, cfg, validate=False):
             else:
                 runner.register_hook(DistEvalmAPHook(cfg.data.val))
 
-    # 根据配置文件更新runner中的两个配置选项
+    # 选择从断点(resume)继续训练还是从头训练(load)
     if cfg.resume_from:   
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
