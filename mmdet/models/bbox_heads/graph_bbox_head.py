@@ -6,15 +6,15 @@ from ..utils import ConvModule
 import torch.nn.functional as F
 from mmdet.core import (weighted_cross_entropy, weighted_smoothl1, accuracy)
 
-@HEADS.register_module
+@HEADS.register_module          # mmdetection中注册模块
 class GraphBBoxHead(BBoxHead):
     """More general bbox head, with shared conv and fc layers and two optional
-    separated branches.
+    separated branches. 共享卷积层和全连接层
 
-                                /-> cls convs -> cls fcs -> cls
+                                /-> cls convs -> cls fcs -> cls  
     shared convs -> shared fcs
                                 \-> reg convs -> reg fcs -> reg
-    """  # noqa: W605
+    """  # noqa: W605    no quality assurance 无质量保证
 
     def __init__(self,
                  num_attr_conv=0,
@@ -32,14 +32,15 @@ class GraphBBoxHead(BBoxHead):
                  fc_out_channels=1024,
                  *args,
                  **kwargs):
+        
         super(GraphBBoxHead, self).__init__(*args, **kwargs)
-        # original FPN head
+        # original FPN head   原始的 FPN head
         self.num_shared_fcs = num_shared_fcs
         self.normalize = normalize
         self.with_bias = normalize is None
         self.fc_out_channels = fc_out_channels
         # add shared convs and fcs
-        _, self.shared_fcs, last_layer_dim = \
+        _, self.shared_fcs, last_layer_dim = \              # 表示接着下一行
             self._add_conv_fc_branch(0, self.in_channels, num_branch_fcs=self.num_shared_fcs)
         if num_shared_fcs > 0:
             self.cls_last_dim = last_layer_dim
@@ -49,16 +50,16 @@ class GraphBBoxHead(BBoxHead):
             self.cls_last_dim = self.in_channels
             self.reg_last_dim = self.in_channels
 
-        # corresponding to graph compute
+        # corresponding to graph compute  相应的图谱计算
         self.attr_transferW = nn.ModuleList()
         self.rela_transferW = nn.ModuleList()
         self.spat_transferW = nn.ModuleList()
-        if with_attr:
+        if with_attr:                # 如果有属性知识
             self.attr_convs, _, _ = self._add_conv_fc_branch(num_attr_conv, self.in_channels, nf, ratio)
-            self.attr_transferW = nn.Linear(self.in_channels, graph_out_channels)
+            self.attr_transferW = nn.Linear(self.in_channels, graph_out_channels)    # 全连接层
             self.cls_last_dim = self.cls_last_dim + graph_out_channels
             self.reg_last_dim = self.reg_last_dim + graph_out_channels
-        if with_rela:
+        if with_rela:                # 如果有关系知识
             self.rela_convs, _, _ = self._add_conv_fc_branch(num_rela_conv, self.in_channels, nf, ratio)
             self.rela_transferW = nn.Linear(self.in_channels, graph_out_channels)
             self.cls_last_dim = self.cls_last_dim + graph_out_channels
@@ -73,9 +74,9 @@ class GraphBBoxHead(BBoxHead):
         self.with_spat = with_spat
         self.num_spat_graph = num_spat_graph
 
-        # classifer and bbox regression
+        # classifer and bbox regression 分类和边界框回归
         self.relu = nn.ReLU(inplace=True)
-        # reconstruct fc_cls and fc_reg since input channels are changed
+        # reconstruct fc_cls and fc_reg since input channels are changed  因为输入通道已更改，所以重建fc_cls和fc_reg（全连接层对应的类别和回归）
         if self.with_cls:
             self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
         if self.with_reg:
@@ -90,12 +91,12 @@ class GraphBBoxHead(BBoxHead):
                             nf=0,
                             ratio=[0],
                             num_branch_fcs=0):
-        """Add shared or separable branch
+        """Add shared or separable branch   添加共享或单独的分支
 
         convs -> avg pool (optional) -> fcs
         """
         last_layer_dim = in_channels
-        # add branch specific conv layers
+        # add branch specific conv layers 添加特定的卷积层分支
         branch_convs = nn.ModuleList()
         if num_branch_convs > 0:
             assert num_branch_convs == len(ratio) + 1
