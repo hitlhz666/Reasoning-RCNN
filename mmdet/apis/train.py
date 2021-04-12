@@ -74,7 +74,7 @@ def _dist_train(model, dataset, cfg, validate=False):
     
     # build runner 用来为pytorch操控安排训练过程中的各个环节的类，该类在mmcv/mmcv/runner/runner.py中
     # 这个操控包括，要在module中获取中间变量啊，或者加载和保存检查点，或者启动训练、启动测试、或者初始化权重。
-    # 本身这个函数是不能改变这个网络模型的各个部分的，也就是说，我们要真正修改backbone、或者FPN啊，或者分类回归的具体实现，跟这个类无关。
+    # 本身这个函数是不能改变这个网络模型的各个部分的，也就是说，我们要真正修改backbone、FPN、optimizer等，或者分类回归的具体实现，跟这个类无关。
     # 也就是说，你只要把你定义好的网络模型结构，加载好的数据集，你要的优化器等，扔给runner，它就会来帮你跑模型。
     runner = Runner(model, batch_processor, cfg.optimizer, cfg.work_dir,
                     cfg.log_level)
