@@ -10,10 +10,13 @@ from ..registry import HEADS
 @HEADS.register_module
 class BBoxHead(nn.Module):
     """Simplest RoI head, with only two fc layers for classification and
-    regression respectively"""
+    regression respectively   最简单的 RoI head, 只有两个全连接层, 分别为分类和回归
+    
+    
+    """
 
     def __init__(self,
-                 with_avg_pool=False,
+                 with_avg_pool=False,         # 平均池化（下采样）
                  with_cls=True,
                  with_reg=True,
                  roi_feat_size=7,
@@ -32,24 +35,24 @@ class BBoxHead(nn.Module):
         self.num_classes = num_classes
         self.target_means = target_means
         self.target_stds = target_stds
-        self.reg_class_agnostic = reg_class_agnostic
+        self.reg_class_agnostic = reg_class_agnostic      # 回归_分类_不可知
 
         in_channels = self.in_channels
         if self.with_avg_pool:
-            self.avg_pool = nn.AvgPool2d(roi_feat_size)
+            self.avg_pool = nn.AvgPool2d(roi_feat_size)     # 下采样
         else:
-            in_channels *= (self.roi_feat_size * self.roi_feat_size)
+            in_channels *= (self.roi_feat_size * self.roi_feat_size)    # c *= a 等效于 c = c * a
         if self.with_cls:
-            self.fc_cls = nn.Linear(in_channels, num_classes)
+            self.fc_cls = nn.Linear(in_channels, num_classes)    # 用于分类的全连接层
         if self.with_reg:
             out_dim_reg = 4 if reg_class_agnostic else 4 * num_classes
-            self.fc_reg = nn.Linear(in_channels, out_dim_reg)
+            self.fc_reg = nn.Linear(in_channels, out_dim_reg)      # 用于回归的全连接层
         self.debug_imgs = None
 
-    def init_weights(self):
+    def init_weights(self):    # 初始化权重, 使用 torch.nn.init 初始化函数
         if self.with_cls:
-            nn.init.normal_(self.fc_cls.weight, 0, 0.01)
-            nn.init.constant_(self.fc_cls.bias, 0)
+            nn.init.normal_(self.fc_cls.weight, 0, 0.01)   # 正态分布 - N(mean, std)
+            nn.init.constant_(self.fc_cls.bias, 0)         # 常数 - 固定值
         if self.with_reg:
             nn.init.normal_(self.fc_reg.weight, 0, 0.001)
             nn.init.constant_(self.fc_reg.bias, 0)
@@ -57,13 +60,26 @@ class BBoxHead(nn.Module):
     def forward(self, x):
         if self.with_avg_pool:
             x = self.avg_pool(x)
-        x = x.view(x.size(0), -1)
-        cls_score = self.fc_cls(x) if self.with_cls else None
-        bbox_pred = self.fc_reg(x) if self.with_reg else None
+        x = x.view(x.size(0), -1)    # 展平处理, 因为接下来要通过全连接层
+        cls_score = self.fc_cls(x) if self.with_cls else None    # 通过分类的全连接层得到 cls_score
+        bbox_pred = self.fc_reg(x) if self.with_reg else None    # 通过回归的全连接层得到 bbox_pred
+        
         return cls_score, bbox_pred
 
+      
+      
     def get_target(self, sampling_results, gt_bboxes, gt_labels,
                    rcnn_train_cfg):
+       """Compute regression and classification targets for anchors.
+        Args:
+            gt_bboxes (Tensor): Ground truth bboxes of the image,
+                shape (num_gts, 4).
+            gt_bboxes_ignore (Tensor): Ground truth bboxes to be
+                ignored, shape (num_ignored_gts, 4).
+        Returns:
+        bbox_target: labels, label_weights, bbox_targets, bbox_weights
+        
+        """
         pos_proposals = [res.pos_bboxes for res in sampling_results]
         neg_proposals = [res.neg_bboxes for res in sampling_results]
         pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
@@ -88,7 +104,7 @@ class BBoxHead(nn.Module):
              bbox_targets,
              bbox_weights,
              reduce=True):
-        losses = dict()
+        losses = dict()          # loss 为一个字典，存储分类和回归的损失，以及准确率
         if cls_score is not None:
             losses['loss_cls'] = weighted_cross_entropy(
                 cls_score, labels, label_weights, reduce=reduce)
@@ -132,7 +148,7 @@ class BBoxHead(nn.Module):
             return det_bboxes, det_labels
 
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
-        """Refine bboxes during training.
+        """Refine bboxes during training.   改善bbox
 
         Args:
             rois (Tensor): Shape (n*bs, 5), where n is image number per GPU,
