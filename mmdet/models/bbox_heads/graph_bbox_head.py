@@ -45,7 +45,7 @@ class GraphBBoxHead(BBoxHead):
         
         # add shared convs and fcs      添加共享的卷积层和全连接层
         _, self.shared_fcs, last_layer_dim = \              # 表示接着下一行
-            self._add_conv_fc_branch(0, self.in_channels, num_branch_fcs=self.num_shared_fcs)
+            self._add_conv_fc_branch(0, self.in_channels, num_branch_fcs=self.num_shared_fcs)  # last_layer_dim 为前面 _add_conv_fc_branch 网络的输出层数
         
         
         if num_shared_fcs > 0:
@@ -62,9 +62,9 @@ class GraphBBoxHead(BBoxHead):
         self.rela_transferW = nn.ModuleList()
         self.spat_transferW = nn.ModuleList()
         if with_attr:                # 如果有属性知识
-            self.attr_convs, _, _ = self._add_conv_fc_branch(num_attr_conv, self.in_channels, nf, ratio)
-            self.attr_transferW = nn.Linear(self.in_channels, graph_out_channels)    # 全连接层
-            self.cls_last_dim = self.cls_last_dim + graph_out_channels
+            self.attr_convs, _, _ = self._add_conv_fc_branch(num_attr_conv, self.in_channels, nf, ratio)   # 先经过共同的卷积全连接层 _add_conv_fc_branc (下面两个一样)
+            self.attr_transferW = nn.Linear(self.in_channels, graph_out_channels)    # 全连接层, 增加属性变换矩阵W
+            self.cls_last_dim = self.cls_last_dim + graph_out_channels               # 输出维度 / channel 对应增加
             self.reg_last_dim = self.reg_last_dim + graph_out_channels
         if with_rela:                # 如果有关系知识
             self.rela_convs, _, _ = self._add_conv_fc_branch(num_rela_conv, self.in_channels, nf, ratio)
@@ -84,7 +84,7 @@ class GraphBBoxHead(BBoxHead):
         
         # classifer and bbox regression 分类和边界框回归
         self.relu = nn.ReLU(inplace=True)
-        # reconstruct fc_cls and fc_reg since input channels are changed  因为输入通道已更改，所以重建fc_cls和fc_reg（全连接层对应的类别和回归）
+        # reconstruct fc_cls and fc_reg since input channels are changed  因为输入通道已更改，所以重建fc_cls和fc_reg
         if self.with_cls:
             self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
         if self.with_reg:
@@ -94,7 +94,7 @@ class GraphBBoxHead(BBoxHead):
 
 
             
-    # add shared convs and fcs     函数作用：添加共享的卷积层和全连接层
+    # add shared convs and fcs     函数作用: 添加共同的的卷积全连接层   
     def _add_conv_fc_branch(self,
                             num_branch_convs,
                             in_channels,
@@ -103,7 +103,7 @@ class GraphBBoxHead(BBoxHead):
                             num_branch_fcs=0):
         """Add shared or separable branch   添加共享或单独的分支
 
-        convs -> avg pool (optional) -> fcs        卷积层 -> 平均池化层 (可选) -> 全连接层
+        convs -> avg pool (optional) -> fcs        卷积层 -> 平均池化层 (可选) -> 全连接层   此为 roi 的前半部分, 后半部分为对特征层操作, 加知识图谱也是在后半部分
         """
         last_layer_dim = in_channels
         # add branch specific conv layers 添加特定的卷积层分支
@@ -143,34 +143,33 @@ class GraphBBoxHead(BBoxHead):
         super(GraphBBoxHead, self).init_weights()
         for module_list in [self.shared_fcs, self.attr_transferW, self.rela_transferW, self.spat_transferW]:
             for m in module_list.modules():
-                if isinstance(m, nn.Linear):
+                if isinstance(m, nn.Linear):     # 对所有模块的全连接层进行初始化
                     nn.init.xavier_uniform_(m.weight)
                     nn.init.constant_(m.bias, 0)
 
 
-    def forward(self, x, geom_f, bs):
+    def forward(self, x, geom_f, bs):        # bs: batchsize
         # shared part
         if self.num_shared_fcs > 0:
             if self.with_avg_pool:
                 x = self.avg_pool(x)
-            x = x.view(x.size(0), -1)
+            x = x.view(x.size(0), -1)    # 展平处理, 相当于 flatten, 变为一维 tensor
             for fc in self.shared_fcs:
                 x = self.relu(fc(x))
 
-        if x.dim() > 2:
+        if x.dim() > 2:                    # ？？
             if self.with_avg_pool:
                 x = self.avg_pool(x)
             x = x.view(x.size(0), -1)   # 展平处理
         feat_dim = x.size(1)
-        x = x.view(bs, -1, feat_dim)
+        x = x.view(bs, -1, feat_dim)       # ？？
 
-        # compute A adj matrix     计算A矩阵（A矩阵表示加入的知识图谱信息）
+        # compute A adj matrix     计算A矩阵（A矩阵表示加入的知识图谱信息, 即增加的特征图）
         a_super = []
         enhanced_feat = []
         if self.with_attr or self.with_rela:
-            # 当我们再训练网络的时候可能希望保持一部分的网络参数不变，只对其中一部分的参数进行调整；或者值训练部分分支网络，并不让其梯度对主网络的梯度造成影响，
-            # 这时候我们就需要使用detach()函数来切断一些分支的反向传播
-            W1 = x.detach().unsqueeze(2)     # pytorch.detach().detach_() 返回一个新的从当前图中分离的Variable，返回的 Variable 不会梯度更新
+            # detach(): 切断反向传播   pytorch.detach().detach_() 返回一个新的从当前图中分离的Variable，返回的 Variable 不会更新梯度
+            W1 = x.detach().unsqueeze(2)     # unsqueeze(2) 在第二维度上扩展维度 [] ——> [[]]
             W2 = torch.transpose(W1, 1, 2)   # torch.transpose 交换 tensor 的两个维度
             diff_W = torch.abs(W1 - W2)
             diff_W = torch.transpose(diff_W, 1, 3)
@@ -218,7 +217,7 @@ class GraphBBoxHead(BBoxHead):
         
         
         # separate branches
-        assert len(x.size()) == len(enhanced_feat.size())     # 保证特征增强前后尺寸相同
+        assert len(x.size()) == len(enhanced_feat.size())     # 保证增强的特征图与原特征图 tensor 维度一致，这样才能拼接，变为增强的特征图
         x = torch.cat((x, enhanced_feat), -1)
         x_cls = x.view(-1, x.size(-1))
         x_reg = x.view(-1, x.size(-1))
@@ -251,7 +250,7 @@ class GraphBBoxHead(BBoxHead):
         return losses
 
     def propagate_em(self, x, A, W):
-        A = F.softmax(A, 2)
+        A = F.softmax(A, 2)     # 沿 axis=2 方向进行 softmax 操作
         x = torch.bmm(A, x)     # 计算两个tensor的矩阵乘法，torch.bmm(a,b),tensor a 的size为(b,h,w),tensor b 的size为(b,w,h), 注意两个tensor的维度必须为3
         x = W(x)
         return x
