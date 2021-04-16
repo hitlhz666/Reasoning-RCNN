@@ -68,18 +68,45 @@ class BBoxHead(nn.Module):
 
       
       
-    def get_target(self, sampling_results, gt_bboxes, gt_labels,
+    def get_target(self, 
+                   sampling_results, 
+                   gt_bboxes, 
+                   gt_labels,
                    rcnn_train_cfg):
-       """Compute regression and classification targets for anchors.
-        Args:
-            gt_bboxes (Tensor): Ground truth bboxes of the image,
-                shape (num_gts, 4).
-            gt_bboxes_ignore (Tensor): Ground truth bboxes to be
-                ignored, shape (num_ignored_gts, 4).
+      
+    """Calculate the ground truth for all samples in a batch according to
+        the sampling_results.
+        Almost the same as the implementation in bbox_head, we passed
+        additional parameters pos_inds_list and neg_inds_list to
+        `_get_target_single`(见最新版本的 mmdetection/mmdet/models/roi_heads/bbox_heads/bbox_head.py) function.
+       
+       Args:
+            sampling_results (List[obj:SamplingResults]): Assign(分配) results of
+                all images in a batch after sampling.
+            gt_bboxes (list[Tensor]): Gt_bboxes of all images in a batch,
+                each tensor has shape (num_gt, 4),  the last dimension 4
+                represents [tl_x, tl_y, br_x, br_y].
+            gt_labels (list[Tensor]): Gt_labels of all images in a batch,
+                each tensor has shape (num_gt,).
+            rcnn_train_cfg (obj:ConfigDict): `train_cfg` of RCNN.
+
         Returns:
-        bbox_target: labels, label_weights, bbox_targets, bbox_weights
-        
+            Tuple[Tensor]: Ground truth for proposals in a single image.
+            Containing the following list of Tensors:
+                - labels (list[Tensor],Tensor): Gt_labels for all
+                  proposals in a batch, each tensor in list has
+                  shape (num_proposals,) 
+                - label_weights (list[Tensor]): Labels_weights for
+                  all proposals in a batch, each tensor in list has
+                  shape (num_proposals,) 
+                - bbox_targets (list[Tensor],Tensor): Regression target
+                  for all proposals in a batch, each tensor in list
+                  has shape (num_proposals, 4) 
+                - bbox_weights (list[tensor],Tensor): Regression weights for
+                  all proposals in a batch, each tensor in list has shape
+                  (num_proposals, 4) 
         """
+    
         pos_proposals = [res.pos_bboxes for res in sampling_results]
         neg_proposals = [res.neg_bboxes for res in sampling_results]
         pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
@@ -125,6 +152,47 @@ class BBoxHead(nn.Module):
                        scale_factor,
                        rescale=False,
                        cfg=None):
+      
+        """Transform network output for a batch into bbox predictions.
+        If the input rois has batch dimension, the function would be in
+        `batch_mode` and return is a tuple[list[Tensor], list[Tensor]],
+        otherwise, the return is a tuple[Tensor, Tensor].
+        
+        Args:
+            rois (Tensor): Boxes to be transformed. Has shape (num_boxes, 5)
+               or (B, num_boxes, 5)
+            cls_score (list[Tensor] or Tensor): Box scores for
+               each scale level, each is a 4D-tensor, the channel number is
+               num_points * num_classes.
+            bbox_pred (Tensor, optional): Box energies / deltas for each scale
+                level, each is a 4D-tensor, the channel number is
+                num_classes * 4.
+            img_shape (Sequence[int] or torch.Tensor or Sequence[
+                Sequence[int]], optional): Maximum bounds for boxes, specifies
+                (H, W, C) or (H, W). If rois shape is (B, num_boxes, 4), then
+                the max_shape should be a Sequence[Sequence[int]]
+                and the length of max_shape should also be B.
+            scale_factor (tuple[ndarray] or ndarray): Scale factor of the
+               image arange as (w_scale, h_scale, w_scale, h_scale). In
+               `batch_mode`, the scale_factor shape is tuple[ndarray].
+            rescale (bool): If True, return boxes in original image space.
+                Default: False.
+            cfg (obj:`ConfigDict`): `test_cfg` of Bbox Head. Default: None
+            
+        Returns:
+            tuple[list[Tensor], list[Tensor]] or tuple[Tensor, Tensor]:
+            
+                If the input has a batch dimension, the return value is
+                a tuple of the list. The first list contains the boxes of
+                the corresponding image in a batch, each tensor has the
+                shape (num_boxes, 5) and last dimension 5 represent
+                (tl_x, tl_y, br_x, br_y, score). Each Tensor in the second
+                list is the labels with shape (num_boxes, ). The length of
+                both lists should be equal to batch_size. Otherwise return
+                value is a tuple of two tensors, the first tensor is the
+                boxes with scores, the second tensor is the labels, both
+                have the same shape as the first case.
+        """
         if isinstance(cls_score, list):
             cls_score = sum(cls_score) / float(len(cls_score))
         scores = F.softmax(cls_score, dim=1) if cls_score is not None else None
